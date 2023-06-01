@@ -283,16 +283,16 @@ function generateResponses(verb) {
     let code2xx = Object.keys(responses).filter((r => (c = parseInt(r), 200 <= c && c < 300)))[0];
     if (!code2xx) {
         mountResponseSpecSchema(verb, responses);
-        responses[200] = {
+        responses["default"] = {
             content: {
                 'application/json': {
                     schema: {
                         properties: {},
-                        type: 'object',
-                        required: []
+                        type: 'object'
                     }
                 }
-            }
+            },
+            description: ""
         }
     }
 
