@@ -109,7 +109,10 @@ function mapPathItem(i) {
         in: 'path',
         name: i.field,
         description: removeTags(i.description),
-        required: !i.optional
+        // From the OpenAPI 3.0.3 specs:
+        // > If the parameter location is "path", this property is REQUIRED and its value MUST be true.
+        // See https://spec.openapis.org/oas/v3.0.0#fixed-fields-9.
+        required: true
     }
 }
 
