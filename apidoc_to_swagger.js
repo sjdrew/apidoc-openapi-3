@@ -183,6 +183,7 @@ function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody) {
             // generate-schema forget init [required]
             if (mountPlaces[objectName]['required']) {
                 mountPlaces[objectName]['required'].push(propertyName)
+                mountPlaces[objectName]['required'] = _.uniq(mountPlaces[objectName]['required'])
             } else {
                 mountPlaces[objectName]['required'] = [propertyName]
             }
