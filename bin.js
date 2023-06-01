@@ -11,7 +11,7 @@ var argv = program
     .option('-i, --input <string[]>', 'input dir', collect, [])
     .option('-o, --output <string>', 'enable verbose', './docs/')
     .option('--sample <string>', 'sample dir', './sample/')
-    .option('-c, --config <config>', 'Path to config file or to directory containing config file (apidoc.json or apidoc.config.js).', '')
+    .option('-c, --config <config>', 'Path to config file (apidoc.json or apidoc.config.js).', '')
 
     .option('--definitions', 'Include definitions file rather than copying definitions.', false)
 
@@ -46,6 +46,7 @@ const options = {
     verbose: argv.verbose,
     debug: argv.debug,
     parse: parsee,
+    config: argv.config,
 
     filters: transformToObject(argv.parseFilters),
     languages: transformToObject(argv.parseLanguages),
