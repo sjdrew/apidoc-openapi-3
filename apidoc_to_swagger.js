@@ -63,7 +63,7 @@ function extractPaths(apidocJson) {  // cf. https://swagger.io/specification/#pa
 
         for (let j = 0; j < verbs.length; j++) {
             var verb = verbs[j];
-            var type = verb.type;
+            verb.type = verb.type.toLowerCase()
 
             var obj = paths[url] = paths[url] || {};
 
