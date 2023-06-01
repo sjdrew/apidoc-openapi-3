@@ -204,6 +204,10 @@ function generateProps(verb) {
         pathItemObject[verb.type].requestBody = generateRequestBody(verb, verb.body)
     }
 
+    if (verb.deprecated !== undefined) {
+        pathItemObject[verb.type].deprecated = true
+    }
+
     return pathItemObject
 }
 
