@@ -140,14 +140,20 @@ function mapPathItem(i) {
  * @param {ApidocParameter[]} apiDocParams 
  * @param {*} parameter 
  */
-function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody) {
-
+function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody, schemaName) {
     let mountPlaces = {
-        '': Object.values(parameterInBody)[0]['schema']
+        '': parameterInBody
     }
 
-    apiDocParams.forEach(i => {
+    // When the root of the response is a JSON array, all the fields in apiDoc are mounted on an object that doesn't
+    // actually exist in the response. For instance, the field `body.name` might not refer to an actual field.
+    // `body` might only represent the root JSON array.
+    let virtualRootField = ''
+
+    apiDocParams.forEach((i, index) => {
         if (/(<p>)*\[\w+\[\w+/.test(i.description)) return; // handle api doc error for deep nested fields
+
+        const isFirst = index === 0
         const type = i.type.toLowerCase()
         const key = i.field
         const nestedName = createNestedName(i.field, '')
@@ -157,19 +163,27 @@ function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody) {
         else if (!mountPlaces[objectName]['properties']) mountPlaces[objectName]['properties'] = {};
 
         if (type === 'object[]' || type === 'array') {
-            // if schema(parsed from example) doesn't has this constructure, init
-            if (!mountPlaces[objectName]['properties'][propertyName]) {
-                mountPlaces[objectName]['properties'][propertyName] = { type: 'array', items: { type: 'object', properties: {} } }
-            }
+            // If the root of the example is an array and the first field of the apiDoc is an array, then the root of the response is an array.
+            if (isFirst && mountPlaces['']['type'] === 'array' && mountPlaces['']['items']['type'] == 'object') {
+                virtualRootField = i.field
+                // new mount point
+                mountPlaces[key] = mountPlaces['']['items']
+            } else {
+                // if schema(parsed from example) doesn't has this constructure, init
+                if (!mountPlaces[objectName]['properties'][propertyName]) {
+                    mountPlaces[objectName]['properties'][propertyName] = { type: 'array', items: { type: 'object', properties: {} } }
+                }
 
-            // new mount point
-            mountPlaces[key] = mountPlaces[objectName]['properties'][propertyName]['items']
+                // new mount point
+                mountPlaces[key] = mountPlaces[objectName]['properties'][propertyName]['items']
+            }
         } else if (type.endsWith('[]')) {
             // if schema(parsed from example) doesn't has this constructure, init
             if (!mountPlaces[objectName]['properties'][propertyName]) {
                 mountPlaces[objectName]['properties'][propertyName] = {
                     items: {
-                        type: type.slice(0, -2), description: i.description,
+                        type: type.slice(0, -2),
+                        description: i.description,
                         example: i.defaultValue
                     },
                     type: 'array'
@@ -177,7 +191,11 @@ function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody) {
             }
         } else if (type === 'object') {
             // if schema(parsed from example) doesn't has this constructure, init
-            if (!mountPlaces[objectName]['properties'][propertyName]) {
+            if (!mountPlaces[objectName]['properties'][propertyName] || 
+                (
+                    i.optional && mountPlaces[objectName]['properties'][propertyName].type === 'null'
+                )
+            ) {
                 mountPlaces[objectName]['properties'][propertyName] = { type: 'object', properties: {} }
             }
 
@@ -189,7 +207,8 @@ function transferApidocParamsToSwaggerBody(apiDocParams, parameterInBody) {
                 description: i.description
             }
         }
-        if (!i.optional) {
+
+        if (!i.optional && propertyName !== virtualRootField) {
             // generate-schema forget init [required]
             if (mountPlaces[objectName]['required']) {
                 mountPlaces[objectName]['required'].push(propertyName)
@@ -243,12 +262,13 @@ function generateParameters(verb) {
 }
 
 function generateRequestBody(verb, mixedBody) {
+    const schemaName = generatePayloadSchemaName(verb.name)
+
     const bodyParameter = {
         content: {
             'application/json': {
                 schema: {
-                    properties: {},
-                    type: 'object'
+                    $ref: '#/components/schemas/' + schemaName
                 }
             }
         }
@@ -261,11 +281,9 @@ function generateRequestBody(verb, mixedBody) {
             const { code, json } = safeParseJson(example.content)
             const schema = GenerateSchema.json(example.title, json)
             delete schema.$schema;
-            schema.title = verb.name + 'Payload'
-            schemas[verb.name + 'Payload'] = schema
-            bodyParameter.content['application/json'].schema = {
-                $ref: '#/components/schemas/' + verb.name + 'Payload'
-            }
+
+            schema.title = schemaName
+            schemas[schemaName] = schema
 
             bodyParameter.description = example.title
             bodyParameter.content['application/json'].examples[i.toString()] = {
@@ -273,12 +291,33 @@ function generateRequestBody(verb, mixedBody) {
                 value: example.content
             }
         }
+    } else {
+        schemas[schemaName] = {
+            title: schemaName,
+            type: 'object',
+            properties: {}
+        }
     }
 
     if (mixedBody)
-        transferApidocParamsToSwaggerBody(mixedBody, bodyParameter.content)
+        transferApidocParamsToSwaggerBody(mixedBody, schemas[schemaName], schemaName)
 
     return bodyParameter
+}
+
+function generateResponseSchemaName(prefix, code) {
+    if (!_.isUndefined(code) && !_.isNumber(code)) {
+        throw new Error(`'generateResponseSchemaName' expected 'code' to be a number or undefined. Got: ${typeof code}`)
+    }
+
+    if (code === 200)
+        return prefix + 'Response'
+    else
+        return prefix + code + 'Response'
+}
+
+function generatePayloadSchemaName(prefix) {
+    return prefix + 'Payload'
 }
 
 function generateResponses(verb) {
@@ -296,9 +335,8 @@ function generateResponses(verb) {
         }
     }
 
-    let code2xx = Object.keys(responses).filter((r => (c = parseInt(r), 200 <= c && c < 300)))[0];
+    let code2xx = parseInt(Object.keys(responses).filter((r => (c = parseInt(r), 200 <= c && c < 300)))[0])
     if (!code2xx) {
-        mountResponseSpecSchema(verb, responses);
         responses["default"] = {
             content: {
                 'application/json': {
@@ -312,7 +350,7 @@ function generateResponses(verb) {
         }
     }
 
-    mountResponseSpecSchema(verb, responses, code2xx)
+    mountResponseSpecSchema(verb, responses, code2xx, verb.name)
 
     return responses
 }
@@ -321,9 +359,12 @@ function generateResponse(example, responses, schemaPrefix) {
     const { code, json } = safeParseJson(example.content);
     const schema = GenerateSchema.json(example.title, json);
     delete schema.$schema;
-    const schemaName = code === 200 ? schemaPrefix + 'Response' : schemaPrefix + code + 'Response'
+
+    const schemaName = generateResponseSchemaName(schemaPrefix, code)
+
     schema.title = schemaName
     schemas[schemaName] = schema
+
     responses[code] = {
         content: {
             'application/json': {
@@ -337,11 +378,12 @@ function generateResponse(example, responses, schemaPrefix) {
     };
 }
 
-function mountResponseSpecSchema(verb, responses, code2XX) {
+function mountResponseSpecSchema(verb, responses, code2XX, schemaPrefix) {
     // if (verb.success && verb.success['fields'] && verb.success['fields']['Success 200']) {
     if (_.get(verb, 'success.fields.Success ' + code2XX)) {
+        const schemaName = generateResponseSchemaName(schemaPrefix, code2XX)
         const apidocParams = verb.success['fields']['Success ' + code2XX]
-        responses[code2XX].content = transferApidocParamsToSwaggerBody(apidocParams, responses[code2XX].content)
+        transferApidocParamsToSwaggerBody(apidocParams, schemas[schemaName], schemaName)
     }
 }
 
