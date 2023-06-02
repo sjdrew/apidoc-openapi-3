@@ -264,6 +264,19 @@ function generateParameters(verb) {
 function generateRequestBody(verb, mixedBody) {
     const schemaName = generatePayloadSchemaName(verb.name)
 
+    if (verb.body && _.some(verb.body, b => b.type === 'File')) {
+        return {
+            content: {
+                'application/octet-stream': {
+                    schema: {
+                        type: 'string',
+                        format: 'binary'
+                    }
+                }
+            }
+        }
+    }
+
     const bodyParameter = {
         content: {
             'application/json': {
