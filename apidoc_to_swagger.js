@@ -262,7 +262,7 @@ function generateParameters(verb) {
 }
 
 function generateRequestBody(verb, mixedBody) {
-    const schemaName = generatePayloadSchemaName(verb.name)
+    const schemaName = generateRequestSchemaName(verb.name)
 
     if (verb.body && _.some(verb.body, b => b.type === 'File')) {
         return {
@@ -329,8 +329,8 @@ function generateResponseSchemaName(prefix, code) {
         return prefix + code + 'Response'
 }
 
-function generatePayloadSchemaName(prefix) {
-    return prefix + 'Payload'
+function generateRequestSchemaName(prefix) {
+    return prefix + 'Request'
 }
 
 function generateResponses(verb) {
