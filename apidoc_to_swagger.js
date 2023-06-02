@@ -2,6 +2,8 @@ var _ = require('lodash');
 var { pathToRegexp } = require('path-to-regexp');
 const GenerateSchema = require('generate-schema');
 
+let schemas = {}
+
 var log;
 
 function setLogger(logger) {
@@ -20,6 +22,14 @@ function toSwagger(apidocJson, projectJson) {
     // for (const key in swagger) {
     //     console.log('[%s] %o', key, swagger[key]);
     // }
+    swagger.components = {
+        schemas: {}
+    }
+
+    for (const schemaName in schemas) {
+        swagger.components.schemas[schemaName] = schemas[schemaName]
+    }
+
     return swagger;
 }
 
@@ -251,7 +261,12 @@ function generateRequestBody(verb, mixedBody) {
             const { code, json } = safeParseJson(example.content)
             const schema = GenerateSchema.json(example.title, json)
             delete schema.$schema;
-            bodyParameter.content['application/json'].schema = schema
+            schema.title = verb.name + 'Payload'
+            schemas[verb.name + 'Payload'] = schema
+            bodyParameter.content['application/json'].schema = {
+                $ref: '#/components/schemas/' + verb.name + 'Payload'
+            }
+
             bodyParameter.description = example.title
             bodyParameter.content['application/json'].examples[i.toString()] = {
                 summary: example.title,
@@ -272,12 +287,12 @@ function generateResponses(verb) {
     const responses = {}
     if (success && success.examples) {
         for (const example of success.examples) {
-            generateResponse(example, responses);
+            generateResponse(example, responses, verb.name);
         }
     }
     if (error && error.examples) {
         for (const example of error.examples) {
-            generateResponse(example, responses);
+            generateResponse(example, responses, verb.name);
         }
     }
 
@@ -302,15 +317,20 @@ function generateResponses(verb) {
     return responses
 }
 
-function generateResponse(example, responses) {
+function generateResponse(example, responses, schemaPrefix) {
     const { code, json } = safeParseJson(example.content);
     const schema = GenerateSchema.json(example.title, json);
     delete schema.$schema;
+    const schemaName = code === 200 ? schemaPrefix + 'Response' : schemaPrefix + code + 'Response'
+    schema.title = schemaName
+    schemas[schemaName] = schema
     responses[code] = {
         content: {
             'application/json': {
                 example: JSON.stringify(json),
-                schema
+                schema: {
+                    $ref: '#/components/schemas/' + schemaName
+                }
             }
         },
         description: example.title
