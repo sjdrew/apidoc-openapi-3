@@ -228,7 +228,8 @@ function generateProps(verb) {
     pathItemObject[verb.type] = {
         tags: [verb.group],
         summary: removeTags(verb.name),
-        description: removeTags(verb.title || '') + (verb.description ? ' - ' + removeTags(verb.description) : ''),
+        // sjd description: removeTags(verb.title || '') + (verb.description ? ' - ' + removeTags(verb.description) : ''),
+        description: removeTags(verb.title || '') + (verb.description ? ' ' + verb.description : ''),
         parameters,
         responses
     }
